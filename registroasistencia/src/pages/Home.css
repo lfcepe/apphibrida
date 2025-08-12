@@ -16,7 +16,7 @@
 }
 
 .card-left, .card-right {
-  background-color: rgb(140, 225, 242);
+  background-color: rgb(146, 193, 202);
   border-radius: 8px;
   padding: 1rem;
   box-shadow: 0 0 8px rgba(0, 0, 0, 0.1);
@@ -53,6 +53,8 @@
   gap: 0.7rem;
   width: 100%;
   margin-bottom: 1rem;
+  justify-content: center;
+  align-items: center;
 }
 
 .cedula-input {
@@ -63,6 +65,7 @@
   text-align: left;
   --padding-start: 0.8rem;
   border: 1px solid #ccc;
+  width: 20rem;
 }
 
 .btn-registrar {
