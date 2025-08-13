@@ -1,5 +1,5 @@
 /* ===========================
-   THEME & BASE
+   THEME & BASE (solo para esta página)
    =========================== */
 :root {
   --bg-gradient: radial-gradient(1200px 600px at 10% 0%, #e3f2fd 0%, #f7faff 30%, #ffffff 60%);
@@ -9,10 +9,10 @@
   --text: #0f172a;
   --muted: #64748b;
   --primary: #3b82f6;
-  --primary-hover: #2563eb;
-  --success: #22c55e;
-  --danger: #ef4444;
   --shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+
+  --ok: #22c55e;     /* Puntual */
+  --late: #ef4444;   /* Atrasado (mié ≥17h o sáb ≥08h) */
 }
 
 @media (prefers-color-scheme: dark) {
@@ -24,41 +24,24 @@
     --text: #e5e7eb;
     --muted: #94a3b8;
     --primary: #60a5fa;
-    --primary-hover: #3b82f6;
-    --success: #22c55e;
-    --danger: #f87171;
     --shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+
+    --ok: #22c55e;
+    --late: #f87171;
   }
 }
 
-/* Fondo general de ambas pantallas */
-.home-page {
+/* Fondo de la página */
+.registros-page {
   --background: transparent !important;
   background: var(--bg-gradient);
   min-height: 100%;
 }
 
-/* Contenedor central */
-.container {
-  max-width: 980px;
-  margin: 0 auto;
-  padding: 24px;
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 24px;
-}
-
-@media (min-width: 880px) {
-  .container {
-    grid-template-columns: 1fr 1fr; /* si usas dos columnas en el futuro */
-  }
-}
-
-/* ===========================
-   CARDS (Home izquierda / Registros derecha)
-   =========================== */
-.card-left,
+/* Card centrada */
 .card-right {
+  max-width: 980px;
+  margin: 24px auto;
   background: var(--surface);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
@@ -68,119 +51,13 @@
   padding: 24px;
   transition: transform .2s ease, box-shadow .2s ease, background .2s ease;
 }
-
-.card-left:hover,
 .card-right:hover {
   transform: translateY(-2px);
   box-shadow: 0 14px 40px rgba(15, 23, 42, 0.12);
 }
 
-.home-logo {
-  width: 120px;
-  height: auto;
-  display: block;
-  margin: 0 auto 12px;
-  filter: drop-shadow(0 6px 14px rgba(15, 23, 42, 0.12));
-}
-
-h4 {
-  margin: 4px 0 2px;
-  text-align: center;
-  color: var(--muted);
-  font-weight: 600;
-  letter-spacing: .3px;
-}
-
-.name {
-  margin: 0 0 4px;
-  text-align: center;
-  color: var(--text);
-  font-weight: 800;
-  font-size: 1.25rem;
-  letter-spacing: .2px;
-}
-
-.fecha {
-  text-align: center;
-  color: var(--muted);
-  margin-bottom: 16px;
-}
-
 /* ===========================
-   INPUTS CÉDULA (Home)
-   =========================== */
-.inputs-cedula {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-  margin: 16px 0 10px;
-}
-
-.cedula-field {
-  position: relative;
-}
-
-.input-index {
-  position: absolute;
-  z-index: 2;
-  top: -10px;
-  left: -10px;
-  width: 28px;
-  height: 28px;
-  border-radius: 14px;
-  background: var(--primary);
-  color: white;
-  font-weight: 700;
-  font-size: 0.85rem;
-  display: grid;
-  place-items: center;
-  box-shadow: 0 8px 16px rgba(59, 130, 246, 0.35);
-}
-
-/* IonInput personalizado mediante variables */
-.cedula-input {
-  --background: var(--surface-strong);
-  --color: var(--text);
-  --padding-start: 14px;
-  --padding-end: 14px;
-  --padding-top: 12px;
-  --padding-bottom: 12px;
-  --border-radius: 14px;
-  --highlight-color-focused: var(--primary);
-  border: 1px solid var(--border);
-  height: 52px;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.25);
-}
-
-.cedula-input:focus,
-.cedula-input.ion-touched.ion-invalid {
-  border-color: var(--primary);
-}
-
-/* ===========================
-   BOTONES
-   =========================== */
-.btn-registrar {
-  --background: linear-gradient(135deg, var(--primary), var(--primary-hover));
-  --box-shadow: 0 10px 22px rgba(59, 130, 246, .35);
-  --border-radius: 14px;
-  font-weight: 700;
-  letter-spacing: .3px;
-  height: 48px;
-  margin-top: 8px;
-}
-
-.btn-registrar.button-disabled {
-  opacity: .8;
-  filter: grayscale(.1);
-}
-
-ion-button {
-  --border-radius: 12px;
-}
-
-/* ===========================
-   TABLA (RegistrosPage)
+   TABLA
    =========================== */
 .tabla {
   width: 100%;
@@ -220,12 +97,41 @@ ion-button {
   border-bottom: none;
 }
 
-/* Estado vacío / loaders en tarjetas */
-.card-right .empty,
-.card-right .error {
-  text-align: center;
-  padding: 1rem;
-  color: var(--muted);
+/* ===========================
+   ESTADOS (Atrasado/Puntual)
+   =========================== */
+.row-late {
+  background: linear-gradient(90deg, rgba(239, 68, 68, 0.08), rgba(239, 68, 68, 0.00));
+  position: relative;
+}
+.row-late td { border-bottom-color: rgba(239, 68, 68, 0.18); }
+.row-late::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 6px;
+  background: var(--late);
+  opacity: 0.9;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  font-size: .78rem;
+  font-weight: 800;
+  letter-spacing: .2px;
+  border-radius: 999px;
+  box-shadow: 0 6px 14px rgba(0,0,0,.08);
+}
+.status-badge.ok {
+  background: rgba(34, 197, 94, .16);
+  color: #065f46;
+  border: 1px solid rgba(34, 197, 94, .28);
+}
+.status-badge.late {
+  background: rgba(239, 68, 68, .15);
+  color: #7f1d1d;
+  border: 1px solid rgba(239, 68, 68, .30);
 }
 
 /* ===========================
@@ -246,6 +152,7 @@ ion-button {
     background: var(--surface-strong);
     box-shadow: var(--shadow);
     overflow: hidden;
+    position: relative;
   }
   .tabla td {
     border: none;
@@ -261,6 +168,12 @@ ion-button {
     text-transform: uppercase;
     letter-spacing: .08em;
   }
+
+  /* Barra superior roja en tarjetas atrasadas */
+  .tabla tr.row-late::before {
+    width: 100%;
+    height: 4px;
+  }
 }
 
 /* ===========================
@@ -268,16 +181,3 @@ ion-button {
    =========================== */
 .text-center { text-align: center; }
 .mt-8 { margin-top: 8px; }
-.mt-16 { margin-top: 16px; }
-
-/* Centrar tarjeta de Home */
-.container {
-  display: flex;
-  justify-content: center;
-}
-.card-left {
-  max-width: 520px;
-  width: 100%;
-  margin: 0 auto;
-}
-

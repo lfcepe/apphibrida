@@ -1,0 +1,8 @@
+{
+	"appId": "com.ejemplo.registroasistencia",
+	"appName": "registroasistencia",
+	"webDir": "build",
+	"server": {
+		"androidScheme": "https"
+	}
+}

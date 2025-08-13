@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">registroasistencia</string>
+    <string name="title_activity_main">registroasistencia</string>
+    <string name="package_name">com.ejemplo.registroasistencia</string>
+    <string name="custom_url_scheme">com.ejemplo.registroasistencia</string>
+</resources>
