@@ -55,8 +55,8 @@
   "scripts": {
     "proxy:dev": "ts-node-dev --project tsconfig.proxy.json --respawn --transpile-only proxy.dev.ts",
     "start": "react-scripts start",
-    "web:serve": "ts-node-dev --respawn --transpile-only server.ts",
-    "web": "npm run build && ts-node-dev --respawn --transpile-only server.ts",
+    "web:ts": "ts-node-dev --respawn --transpile-only server.ts",
+    "web": "ts-node-dev --transpile-only server.ts",
     "dev": "concurrently \"npm run proxy:dev\" \"npm start\"",
     "build": "react-scripts build",
     "test": "react-scripts test --transformIgnorePatterns 'node_modules/(?!(@ionic/react|@ionic/react-router|@ionic/core|@stencil/core|ionicons)/)'",

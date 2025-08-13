@@ -12,113 +12,154 @@ import {
 } from '@ionic/react';
 import './RegistrosPage.css';
 
-type OfflineRegistro = {
-  savedAt?: string; // ISO guardado por el server local
-  source?: string;
-  payload?: {
-    record_user: number;
-    join_user: string;
-  };
-  // Compatibilidad si en el futuro lees directo del remoto:
+type BackendAttendance = {
+  record?: number;    // puede venir como número
+  date?: string;      // "YYYY-MM-DD"
+  time?: string;      // "HH:mm:ss"
+  join_date?: string; // "YYYY-MM-DD HH:mm:ss" (opcional)
+};
+
+type UserData = {
+  record: number;
+  user: string;
   names?: string;
   lastnames?: string;
-  date?: string; // "YYYY-MM-DD"
-  time?: string; // "HH:mm:ss"
-  user?: string;
+  id?: string;
+};
+
+const TZ = 'America/Guayaquil';
+
+/** Convierte Date→partes en la zona de Ecuador */
+const partsObj = (date: Date) => {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: TZ,
+    hour12: false,
+    weekday: 'short',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  }).formatToParts(date);
+  const obj: Record<string, string> = {};
+  parts.forEach(p => (obj[p.type] = p.value));
+  return obj; // {weekday,year,month,day,hour,minute,second}
+};
+
+const formatDateEC = (d: Date) => {
+  const o = partsObj(d);
+  return `${o.year}-${o.month}-${o.day}`;
+};
+const formatTimeEC = (d: Date) => {
+  const o = partsObj(d);
+  return `${o.hour}:${o.minute}:${o.second}`;
+};
+
+/** Atraso según hora/día en Ecuador */
+const isLateEC = (d: Date) => {
+  const o = partsObj(d);
+  const wd = o.weekday;               // 'Sun','Mon','Tue','Wed','Thu','Fri','Sat'
+  const h  = Number(o.hour || '0');
+  return (wd === 'Wed' && h >= 17) || (wd === 'Sat' && h >= 8);
+};
+
+/** Intenta construir un Date con la info que venga del backend */
+const makeDateFromBackend = (row: BackendAttendance): Date | null => {
+  if (row.join_date) {
+    const d = new Date(row.join_date.replace(' ', 'T'));
+    if (!isNaN(+d)) return d;
+  }
+  if (row.date && row.time) {
+    const d = new Date(`${row.date}T${row.time}`);
+    if (!isNaN(+d)) return d;
+    const d2 = new Date(`${row.date} ${row.time}`);
+    if (!isNaN(+d2)) return d2;
+  }
+  if (row.date) {
+    const d = new Date(`${row.date}T00:00:00`);
+    if (!isNaN(+d)) return d;
+  }
+  return null;
 };
 
 const RegistrosPage: React.FC = () => {
-  const [registros, setRegistros] = useState<OfflineRegistro[]>([]);
+  const [userData, setUserData] = useState<UserData | null>(null);
+  const [rows, setRows] = useState<BackendAttendance[]>([]);
   const [loading, setLoading] = useState(true);
   const [errMsg, setErrMsg] = useState<string | null>(null);
 
-  const formateaFecha = (d: Date) => {
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}`;
-  };
-  const formateaHora = (d: Date) => {
-    const hh = String(d.getHours()).padStart(2, '0');
-    const mi = String(d.getMinutes()).padStart(2, '0');
-    const ss = String(d.getSeconds()).padStart(2, '0');
-    return `${hh}:${mi}:${ss}`;
-  };
-
-  // Convierte una fila (offline o remota) a Date local del registro
-  const resolveDateFromRow = (row: OfflineRegistro): Date | null => {
-    if (row.savedAt) {
-      const d = new Date(row.savedAt);
-      return isNaN(+d) ? null : d;
+  // Carga el usuario (tomamos el record para consultar)
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('user');
+      if (!raw) return;
+      const u = JSON.parse(raw);
+      setUserData(u);
+    } catch {
+      setUserData(null);
     }
-    if (row.date && row.time) {
-      const isoLike = `${row.date}T${row.time}`;
-      const d = new Date(isoLike);
-      if (!isNaN(+d)) return d;
-      const d2 = new Date(`${row.date} ${row.time}`);
-      return isNaN(+d2) ? null : d2;
+  }, []);
+
+  const fetchRegistros = useCallback(async () => {
+    if (!userData?.record && userData?.record !== 0) {
+      setErrMsg('No hay usuario válido en sesión.');
+      setRows([]);
+      setLoading(false);
+      return;
     }
-    return null;
-  };
-
-  // Reglas de atraso:
-  // - Miércoles (3) >= 17:00
-  // - Sábado   (6) >= 08:00
-  const isLate = (d: Date) =>
-    (d.getDay() === 3 && d.getHours() >= 17) ||
-    (d.getDay() === 6 && d.getHours() >= 8);
-
-  const obtenerRegistros = useCallback(async () => {
     setLoading(true);
     setErrMsg(null);
     try {
-      const resp = await fetch('/api/offline-attendance');
+      // GET remoto vía proxy: /api/examen.php?record=<record>
+      const url = `/api/examen.php?record=${encodeURIComponent(String(userData.record))}`;
+      const resp = await fetch(url, { method: 'GET' });
       const ct = resp.headers.get('content-type') || '';
-      if (!ct.includes('application/json')) {
-        const text = await resp.text();
-        console.error('Respuesta no JSON:', text);
-        throw new Error('No se pudo leer los registros locales.');
-      }
-      const data = (await resp.json()) as OfflineRegistro[];
 
-      // Ordena desc por fecha
-      data.sort((a, b) => {
-        const da = resolveDateFromRow(a);
-        const db = resolveDateFromRow(b);
+      let payload: any;
+      if (ct.includes('application/json')) {
+        payload = await resp.json();
+      } else {
+        // si viene texto, intenta parsear; si no, muestra error
+        const text = await resp.text();
+        try {
+          payload = JSON.parse(text);
+        } catch {
+          throw new Error(text || 'Respuesta no JSON del backend');
+        }
+      }
+
+      // Normaliza a array (por si a veces devuelven objeto)
+      const arr: BackendAttendance[] = Array.isArray(payload) ? payload : [payload];
+
+      // Filtra filas no-vacías
+      const norm = arr.filter(
+        r => r && (r.date || r.time || r.join_date || typeof r.record !== 'undefined')
+      );
+
+      // Ordena desc por fecha/hora
+      norm.sort((a, b) => {
+        const da = makeDateFromBackend(a);
+        const db = makeDateFromBackend(b);
         if (!da && !db) return 0;
         if (!da) return 1;
         if (!db) return -1;
         return db.getTime() - da.getTime();
       });
 
-      setRegistros(data);
-    } catch (error: any) {
-      console.error('Error al obtener registros locales:', error);
-      setErrMsg(error?.message || 'Error al obtener registros locales');
-      setRegistros([]);
+      setRows(norm);
+    } catch (e: any) {
+      console.error('Error al obtener registros remotos:', e);
+      setErrMsg(e?.message || 'Error al obtener registros');
+      setRows([]);
     } finally {
       setLoading(false);
     }
-  }, []);
-
-  const limpiarRegistros = async () => {
-    if (!confirm('¿Desea eliminar los registros guardados localmente?')) return;
-    try {
-      const resp = await fetch('/api/offline-attendance', { method: 'DELETE' });
-      if (!resp.ok) {
-        const t = await resp.text();
-        throw new Error(t || 'No se pudo limpiar');
-      }
-      await obtenerRegistros();
-      alert('Registros locales eliminados');
-    } catch (e: any) {
-      alert(e?.message || 'Error al limpiar registros');
-    }
-  };
+  }, [userData?.record]);
 
   useEffect(() => {
-    obtenerRegistros();
-  }, [obtenerRegistros]);
+    if (userData) fetchRegistros();
+  }, [userData, fetchRegistros]);
 
   return (
     <IonPage>
@@ -129,16 +170,18 @@ const RegistrosPage: React.FC = () => {
           </IonButtons>
           <IonTitle>Registros</IonTitle>
           <IonButtons slot="end">
-            <IonButton onClick={obtenerRegistros}>Refrescar</IonButton>
-            <IonButton color="danger" onClick={limpiarRegistros}>
-              Limpiar</IonButton>
+            <IonButton onClick={fetchRegistros}>Refrescar</IonButton>
           </IonButtons>
         </IonToolbar>
       </IonHeader>
 
       <IonContent className="registros-page">
         <div className="card-right">
-          {loading ? (
+          {!userData ? (
+            <div className="text-center" style={{ padding: '1rem' }}>
+              <p>Inicia sesión para ver tus registros.</p>
+            </div>
+          ) : loading ? (
             <div className="text-center" style={{ padding: '2rem' }}>
               <IonSpinner name="dots" />
               <p className="mt-8">Cargando registros…</p>
@@ -147,9 +190,9 @@ const RegistrosPage: React.FC = () => {
             <div className="text-center" style={{ padding: '1rem', color: 'crimson' }}>
               <p>{errMsg}</p>
             </div>
-          ) : registros.length === 0 ? (
+          ) : rows.length === 0 ? (
             <div className="text-center" style={{ padding: '1rem' }}>
-              <p>No hay registros guardados localmente.</p>
+              <p>No hay registros para mostrar.</p>
             </div>
           ) : (
             <table className="tabla">
@@ -157,34 +200,33 @@ const RegistrosPage: React.FC = () => {
                 <tr>
                   <th>Usuario</th>
                   <th>Record</th>
-                  <th>Fecha</th>
-                  <th>Hora</th>
+                  <th>Fecha (EC)</th>
+                  <th>Hora (EC)</th>
                   <th>Estado</th>
                 </tr>
               </thead>
               <tbody>
-                {registros.map((row, i) => {
-                  const d = resolveDateFromRow(row);
-                  const late = !!(d && isLate(d));
-                  const rowClass = late ? 'row-late' : '';
+                {rows.map((r, i) => {
+                  const d = makeDateFromBackend(r);
+                  const fecha = d ? formatDateEC(d) : (r.date ?? '-');
+                  const hora  = d ? formatTimeEC(d) : (r.time ?? '-');
+                  const late  = d ? isLateEC(d) : false;
 
-                  const nombreCompuesto = [row?.names, row?.lastnames].filter(Boolean).join(' ').trim();
-                  const usuario = (
-                    row?.payload?.join_user ??
-                    row?.user ??
-                    nombreCompuesto
-                  ) || '-';
+                  const usuario =
+                    userData?.user ||
+                    [userData?.names, userData?.lastnames].filter(Boolean).join(' ') ||
+                    '-';
 
-                  const record = row?.payload?.record_user ?? '-';
-                  const fecha  = d ? formateaFecha(d) : row.date || '-';
-                  const hora   = d ? formateaHora(d) : row.time || '-';
+                  const record = typeof r.record !== 'undefined'
+                    ? String(r.record)
+                    : String(userData?.record ?? '-');
 
                   return (
-                    <tr key={i} className={rowClass}>
+                    <tr key={i} className={late ? 'row-late' : ''}>
                       <td data-label="Usuario">{usuario}</td>
                       <td data-label="Record">{record}</td>
-                      <td data-label="Fecha">{fecha}</td>
-                      <td data-label="Hora">{hora}</td>
+                      <td data-label="Fecha (EC)">{fecha}</td>
+                      <td data-label="Hora (EC)">{hora}</td>
                       <td data-label="Estado">
                         <span className={`status-badge ${late ? 'late' : 'ok'}`}>
                           {late ? 'Atrasado' : 'Puntual'}

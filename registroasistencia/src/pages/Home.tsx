@@ -14,13 +14,31 @@ import { useHistory } from 'react-router-dom';
 import './Home.css';
 
 type UserData = {
-  record: number;
-  id: string;         // cédula
+  record: number;     // se enviará como record_user
+  id: string;         // cédula (para validar dígitos)
   lastnames: string;
   names: string;
-  user: string;
+  user: string;       // se enviará como join_user
   mail?: string;
   phone?: string;
+};
+
+const TZ = 'America/Guayaquil';
+
+// "YYYY-MM-DD HH:mm:ss" en Ecuador
+const formatEcuador = (date: Date) => {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: TZ,
+    hour12: false,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  }).formatToParts(date);
+  const get = (t: string) => parts.find(p => p.type === t)?.value || '';
+  return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}:${get('second')}`;
 };
 
 const Home: React.FC = () => {
@@ -28,17 +46,15 @@ const Home: React.FC = () => {
   const [digit1, setDigit1] = useState('');
   const [digit2, setDigit2] = useState('');
   const [userData, setUserData] = useState<UserData | null>(null);
-  const [reqIdx, setReqIdx] = useState<{ a: number; b: number } | null>(null); // posiciones 1-based
+  const [reqIdx, setReqIdx] = useState<{ a: number; b: number } | null>(null);
   const [sending, setSending] = useState(false);
   const history = useHistory();
 
-  // Reloj
+  // Reloj EC
   useEffect(() => {
-    const interval = setInterval(() => {
-      const ahora = new Date();
-      const formateada = ahora.toISOString().slice(0, 19).replace('T', ' ');
-      setFechaHora(formateada);
-    }, 1000);
+    const tick = () => setFechaHora(formatEcuador(new Date()));
+    tick();
+    const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -59,16 +75,16 @@ const Home: React.FC = () => {
     }
   }, [history]);
 
-  // Elegir dos posiciones aleatorias (1..len), distintas
+  // Posiciones aleatorias (1..len)
   const rollPositions = (len: number) => {
     if (len < 2) return { a: 1, b: 1 };
-    const a = Math.floor(Math.random() * len) + 1; // 1..len
+    const a = Math.floor(Math.random() * len) + 1;
     let b = Math.floor(Math.random() * len) + 1;
     while (b === a) b = Math.floor(Math.random() * len) + 1;
     return { a, b };
   };
 
-  // Inicializa posiciones SOLO cuando ya tenemos la cédula
+  // Inicializa posiciones cuando haya cédula
   useEffect(() => {
     if (userData?.id) {
       setReqIdx(rollPositions(userData.id.length));
@@ -82,7 +98,6 @@ const Home: React.FC = () => {
     return `Para registrar su asistencia ingrese los dígitos #${reqIdx.a} y #${reqIdx.b} de su cédula`;
   }, [reqIdx]);
 
-  // Normaliza a 1 dígito numérico
   const onlyOneDigit = (val?: string | null) =>
     String(val ?? '').replace(/\D/g, '').slice(0, 1);
 
@@ -106,54 +121,65 @@ const Home: React.FC = () => {
     return digit1 === d1 && digit2 === d2;
   };
 
-  const registrarAsistencia = async () => {
-    if (!userData || !reqIdx) {
-      alert('Sesión no válida. Inicie sesión nuevamente.');
-      history.push('/login');
-      return;
-    }
-    if (!digit1 || !digit2) {
-      alert('Debe ingresar ambos dígitos solicitados.');
-      return;
-    }
-    if (!validarDigitos()) {
-      alert('Los dígitos no coinciden con su cédula.');
-      return;
-    }
+// REGISTRA por POST /api/examen.php con JSON { record_user, join_user }
+const registrarAsistencia = async () => {
+  if (!userData || !reqIdx) {
+    alert('Sesión no válida. Inicie sesión nuevamente.');
+    history.push('/login');
+    return;
+  }
+  if (!digit1 || !digit2) {
+    alert('Debe ingresar ambos dígitos solicitados.');
+    return;
+  }
+  if (!validarDigitos()) {
+    alert('Los dígitos no coinciden con su cédula.');
+    return;
+  }
 
-    try {
-      setSending(true);
-      const resp = await fetch('/api/examen.php', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          record_user: userData.record,
-          join_user: userData.user
-        })
-      });
+  try {
+    setSending(true);
 
-      const ct = resp.headers.get('content-type') || '';
-      if (!ct.includes('application/json')) {
-        const text = await resp.text();
-        console.error('Respuesta no JSON del servidor/proxy:', text);
-        throw new Error('Respuesta inesperada del servidor');
+    const resp = await fetch('/api/examen.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        record_user: userData.record,
+        join_user: userData.user
+      })
+    });
+
+    const ct = resp.headers.get('content-type') || '';
+    const ok = resp.ok;                    // <- aquí el cambio (const en vez de let)
+    let msg = 'Asistencia registrada correctamente';
+
+    if (ct.includes('application/json')) {
+      try {
+        const payload = await resp.json();
+        if (payload?.message) msg = String(payload.message);
+        if (payload?.error && !ok) msg = String(payload.error);
+      } catch {
+        // deja msg por defecto
       }
-
-      const data = await resp.json();
-
-      if (resp.ok) {
-        alert('Asistencia registrada correctamente');
-        cambiarDigitos(); // nuevas posiciones para el siguiente registro
-      } else {
-        alert('Error al registrar asistencia: ' + (data?.error || ''));
-      }
-    } catch (err: any) {
-      console.error('Error POST /api/examen.php:', err);
-      alert(err?.message || 'Error al conectar con el servidor');
-    } finally {
-      setSending(false);
+    } else {
+      const _text = (await resp.text()).trim();
+      // no mostramos texto crudo; mantenemos msg por defecto
     }
-  };
+
+    if (ok) {
+      alert(msg);
+      cambiarDigitos();
+    } else {
+      alert('Error al registrar asistencia: ' + msg);
+    }
+  } catch (err: any) {
+    console.error('Error POST /api/examen.php', err);
+    alert(err?.message || 'Error al conectar con el servidor');
+  } finally {
+    setSending(false);
+  }
+};
+
 
   const listo = Boolean(userData?.id) && Boolean(reqIdx);
 
@@ -178,7 +204,7 @@ const Home: React.FC = () => {
             <h3 className="name">
               {userData?.names?.toUpperCase()} {userData?.lastnames?.toUpperCase()}
             </h3>
-            <p className="fecha">Fecha y hora: {fechaHora}</p>
+            <p className="fecha">Fecha y hora (Ecuador): {fechaHora}</p>
 
             {!listo ? (
               <div style={{ padding: '1rem' }} className="text-center">
@@ -220,7 +246,7 @@ const Home: React.FC = () => {
                   onClick={registrarAsistencia}
                   disabled={sending}
                 >
-                  {sending ? 'Enviando...' : 'Registrar'}
+                  {sending ? 'Enviando…' : 'Registrar'}
                 </IonButton>
 
                 <IonButton
