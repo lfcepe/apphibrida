@@ -1,4 +1,4 @@
-package com.ejemplo.registroasistencia;
+package com.puce.registroasistencia;
 
 import com.getcapacitor.BridgeActivity;
 

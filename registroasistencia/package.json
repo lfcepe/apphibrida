@@ -4,8 +4,8 @@
   "private": true,
   "dependencies": {
     "@capacitor-community/http": "^1.4.1",
-    "@capacitor/android": "^3.9.0",
-    "@capacitor/core": "^3.9.0",
+    "@capacitor/android": "^7.4.2",
+    "@capacitor/core": "^7.4.2",
     "@ionic/react": "^7.0.0",
     "@ionic/react-router": "^7.0.0",
     "@testing-library/jest-dom": "^5.11.9",
@@ -38,7 +38,7 @@
     "workbox-streams": "^5.1.4"
   },
   "devDependencies": {
-    "@capacitor/cli": "^3.9.0",
+    "@capacitor/cli": "^7.4.2",
     "@types/express": "^4.17.23",
     "@types/http-proxy-middleware": "^0.19.3",
     "@types/node": "^24.2.1",

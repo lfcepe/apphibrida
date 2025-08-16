@@ -14,31 +14,13 @@ import { useHistory } from 'react-router-dom';
 import './Home.css';
 
 type UserData = {
-  record: number;     // se enviará como record_user
-  id: string;         // cédula (para validar dígitos)
+  record: number;
+  id: string;
   lastnames: string;
   names: string;
-  user: string;       // se enviará como join_user
+  user: string;
   mail?: string;
   phone?: string;
-};
-
-const TZ = 'America/Guayaquil';
-
-// "YYYY-MM-DD HH:mm:ss" en Ecuador
-const formatEcuador = (date: Date) => {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: TZ,
-    hour12: false,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
-  }).formatToParts(date);
-  const get = (t: string) => parts.find(p => p.type === t)?.value || '';
-  return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}:${get('second')}`;
 };
 
 const Home: React.FC = () => {
@@ -50,9 +32,15 @@ const Home: React.FC = () => {
   const [sending, setSending] = useState(false);
   const history = useHistory();
 
-  // Reloj EC
+  // Reloj simple (hora local del navegador)
   useEffect(() => {
-    const tick = () => setFechaHora(formatEcuador(new Date()));
+    const tick = () => {
+      const d = new Date();
+      const pad = (n: number) => String(n).padStart(2, '0');
+      setFechaHora(
+        `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+      );
+    };
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
@@ -68,10 +56,10 @@ const Home: React.FC = () => {
         setUserData(parsed);
       } catch {
         localStorage.removeItem('user');
-        history.push('/login');
+        history.replace('/login');
       }
     } else {
-      history.push('/login');
+      history.replace('/login');
     }
   }, [history]);
 
@@ -101,9 +89,29 @@ const Home: React.FC = () => {
   const onlyOneDigit = (val?: string | null) =>
     String(val ?? '').replace(/\D/g, '').slice(0, 1);
 
+  // 🔴 Cerrar sesión: limpiar todo y reemplazar historial
   const cerrarSesion = () => {
-    localStorage.removeItem('user');
-    history.push('/login');
+    try {
+      // limpia datos de tu app
+      localStorage.removeItem('user');
+      // si prefieres borrar TODO:
+      // localStorage.clear();
+      sessionStorage.clear();
+
+      // (Opcional) limpia Cache Storage de la app
+      if ('caches' in window) {
+        caches.keys().then(keys => keys.forEach(k => caches.delete(k)));
+      }
+      // (Opcional) desregistrar service workers (si usaste uno)
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(regs => {
+          regs.forEach(r => r.unregister());
+        });
+      }
+    } finally {
+      // evita volver con "atrás" al Home
+      history.replace('/login');
+    }
   };
 
   const cambiarDigitos = () => {
@@ -121,65 +129,59 @@ const Home: React.FC = () => {
     return digit1 === d1 && digit2 === d2;
   };
 
-// REGISTRA por POST /api/examen.php con JSON { record_user, join_user }
-const registrarAsistencia = async () => {
-  if (!userData || !reqIdx) {
-    alert('Sesión no válida. Inicie sesión nuevamente.');
-    history.push('/login');
-    return;
-  }
-  if (!digit1 || !digit2) {
-    alert('Debe ingresar ambos dígitos solicitados.');
-    return;
-  }
-  if (!validarDigitos()) {
-    alert('Los dígitos no coinciden con su cédula.');
-    return;
-  }
+  // REGISTRA por POST /api/examen.php con JSON { record_user, join_user }
+  const registrarAsistencia = async () => {
+    if (!userData || !reqIdx) {
+      alert('Sesión no válida. Inicie sesión nuevamente.');
+      history.replace('/login');
+      return;
+    }
+    if (!digit1 || !digit2) {
+      alert('Debe ingresar ambos dígitos solicitados.');
+      return;
+    }
+    if (!validarDigitos()) {
+      alert('Los dígitos no coinciden con su cédula.');
+      return;
+    }
 
-  try {
-    setSending(true);
+    try {
+      setSending(true);
 
-    const resp = await fetch('/api/examen.php', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        record_user: userData.record,
-        join_user: userData.user
-      })
-    });
+      const resp = await fetch('/api/examen.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          record_user: userData.record,
+          join_user: userData.user
+        })
+      });
 
-    const ct = resp.headers.get('content-type') || '';
-    const ok = resp.ok;                    // <- aquí el cambio (const en vez de let)
-    let msg = 'Asistencia registrada correctamente';
+      const ct = resp.headers.get('content-type') || '';
+      const ok = resp.ok;
+      let msg = 'Asistencia registrada correctamente';
 
-    if (ct.includes('application/json')) {
-      try {
-        const payload = await resp.json();
-        if (payload?.message) msg = String(payload.message);
-        if (payload?.error && !ok) msg = String(payload.error);
-      } catch {
-        // deja msg por defecto
+      if (ct.includes('application/json')) {
+        try {
+          const payload = await resp.json();
+          if (payload?.message) msg = String(payload.message);
+          if (payload?.error && !ok) msg = String(payload.error);
+        } catch { /* deja msg por defecto */ }
       }
-    } else {
-      const _text = (await resp.text()).trim();
-      // no mostramos texto crudo; mantenemos msg por defecto
-    }
 
-    if (ok) {
-      alert(msg);
-      cambiarDigitos();
-    } else {
-      alert('Error al registrar asistencia: ' + msg);
+      if (ok) {
+        alert(msg);
+        cambiarDigitos();
+      } else {
+        alert('Error al registrar asistencia: ' + msg);
+      }
+    } catch (err: any) {
+      console.error('Error POST /api/examen.php', err);
+      alert(err?.message || 'Error al conectar con el servidor');
+    } finally {
+      setSending(false);
     }
-  } catch (err: any) {
-    console.error('Error POST /api/examen.php', err);
-    alert(err?.message || 'Error al conectar con el servidor');
-  } finally {
-    setSending(false);
-  }
-};
-
+  };
 
   const listo = Boolean(userData?.id) && Boolean(reqIdx);
 
@@ -204,7 +206,7 @@ const registrarAsistencia = async () => {
             <h3 className="name">
               {userData?.names?.toUpperCase()} {userData?.lastnames?.toUpperCase()}
             </h3>
-            <p className="fecha">Fecha y hora (Ecuador): {fechaHora}</p>
+            <p className="fecha">Fecha y hora: {fechaHora}</p>
 
             {!listo ? (
               <div style={{ padding: '1rem' }} className="text-center">

@@ -1,10 +1,9 @@
-import type { CapacitorConfig } from '@capacitor/cli';
+import { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.ejemplo.registroasistencia',
+  appId: 'com.puce.registroasistencia',
   appName: 'registroasistencia',
-  webDir: 'build',
-  server: { androidScheme: 'https' }
+  webDir: 'build'
 };
 
 export default config;

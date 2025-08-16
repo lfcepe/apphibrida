@@ -1,8 +1,5 @@
 {
-	"appId": "com.ejemplo.registroasistencia",
+	"appId": "com.puce.registroasistencia",
 	"appName": "registroasistencia",
-	"webDir": "build",
-	"server": {
-		"androidScheme": "https"
-	}
+	"webDir": "build"
 }

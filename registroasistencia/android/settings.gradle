@@ -1,5 +1,9 @@
-include ':app'
-include ':capacitor-cordova-android-plugins'
-project(':capacitor-cordova-android-plugins').projectDir = new File('./capacitor-cordova-android-plugins/')
+// settings.gradle (Groovy)
+rootProject.name = "registroasistencia"
 
+include ':app'
+include ':capacitor-android'
+project(':capacitor-android').projectDir = new File('../node_modules/@capacitor/android/capacitor')
+
+// Deja SIEMPRE esta línea al final:
 apply from: 'capacitor.settings.gradle'
